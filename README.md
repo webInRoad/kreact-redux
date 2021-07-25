@@ -1,70 +1,16 @@
 
-# 一、什么是 Redux
+>[本文代码](https://codesandbox.io/s/github/webInRoad/kreact-redux)
+[上一篇手写了 Redux 源码](https://juejin.cn/post/6988465501047357471)，同时也说明了 Redux 里头是没有 React 相关的 API，这篇咱们来写下 React-Redux，那么 React，Redux 以及 React-Redux 关系是：
+ - Redux： Redux 是一个应用状态管理js库，它本身和 React 是没有关系的，换句话说，Redux 可以应用于其他框架构建的前端应用。
+ - React-Redux：React-Redux 是连接 React 应用和 Redux 状态管理的桥梁。React-redux 主要专注两件事，一是如何向 React 应用中注入 redux 中的 Store ，二是如何根据 Store 的改变，把消息派发给应用中需要状态的每一个组件。
+ - React:用于构建用户界面的库
 
-> A Predictable State Container for JS Apps（JS应用的可预测状态容器）
+#	一、为什么要使用 React-Redux
+上一篇使用 Redux 开发了个加减器的功能，但是暴露了几个问题：
 
-**可预测：**实际上指的是纯函数（每个相同的输入，都会有固定输出，并且没有副作用）这个是由 reducer 来保证的，同时方便了测试
-**状态容器：** 在 web 页面中，每个 DOM 元素都有自己的状态，比如弹出框有显示与隐藏两种状态，列表当前处于第几页，每页显示多少条就是这个列表的状态，存储这些状态的对象就是状态容器。
-虽说 Redux 是 React 全家桶的一员，但实际上 Redux 与 React 没有必然联系，它可以应用在任何其他库上，只是跟 React 搭配比较火。
-![redux Flow](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/44ca55ee2e554912bee90e83536ed4c7~tplv-k3u1fbpfcp-zoom-1.image)
-**Redux 的核心概念：**
- 1. Store: 存储状态的容器， JS 对象
- 2. React Component: 组件，或者称之为视图
- 3. Actions: 对象，描述对状态进行怎样的操作
- 4. Reducers:函数，操作状态并返回新的状态
-
- **Redux 工作流程：**
- 1. 组件通过 dispatch 方法触发 Action 
- 2. Store 接收 Action 并将 Action 分发给 Reducer
- 3. Reducer 根据 Action  类型对状态进行更改并将更改后的状态返回给 Store
- 4. 组件订阅了 Store 中的状态，Store 中的状态更新会同步到组件
- 
-接下来分别讲解下：
-## React Components 
-就是 React 组件，也就是 UI 层
-## Store
-管理数据的仓库，对外暴露些 API
+ 1.  store 需要手动引入，并且在组件初始化以及销毁时，手动进行 subscribe 与 unsubscribe 
 ```javascript
-let store = createStore(reducers);
-```
-有以下职责：
- - 维持应用的 state； 
- - 提供 `getState()` 方法获取 state； 
- - 提供 `dispatch(action)` 方法更新 state； 
- - 通过 `subscribe(listener)` 注册监听器; 
- - 通过 `subscribe(listener)` 返回的函数注销监听器。
- 
-## Action
- action 就是个动作，在组件里通过 `dispatch(action)` 来触发 store 里的数据更改
-## Reducer
-action 只是个指令，告诉 store 要进行怎样的更改，真正更改数据的是 reducer。
-reducer 是个纯函数，正因为它是个纯函数，才保证了 Redux 的可预测性。
-
-# 二、为什么要使用 Redux
-默认 React 传递数据只能自上而下传递，而下层组件要向上层组件传递数据时，需要上层组件传递修改数据的方法到下层组件，当项目越来越大时，这种传递方式会很杂乱。
-而引用了 Redux，由于 Store 是独立于组件，使得数据管理独立于组件，解决了组件间传递数据困难的问题
-## 计数器
-定义个 store 容器文件，根据 reducer 生成 store
-```javascript
-import { createStore } from "redux";
-const counterReducer = (state = 0, { type, payload = 1 }) => {
-  switch (type) {
-    case "ADD":
-      return state + payload;
-    case "MINUS":
-      return state - payload;
-    default:
-      return state;
-  }
-};
-export default createStore(counterReducer);
-```
-在组件中
-
-```javascript
-import React, { Component } from "react";
 import store from "../store";
-export default class Redux extends Component {
   componentDidMount() {
     this.unsubscribe = store.subscribe(() => {
       this.forceUpdate();
@@ -75,420 +21,630 @@ export default class Redux extends Component {
       this.unsubscribe();
     }
   }
+```
+ 2. 状态的更改，会导致所有的组件都重新渲染，比如 A 组件只依赖 a 状态，而 b 状态更改时，也会导致 A 组件的重新渲染
+为了解决这些问题，react-redux 就应运而生了
 
-  add = () => {
-    store.dispatch({ type: "ADD", payload: 1 });
+# 二、什么是 React-Redux 
+React-Redux 是连接 React 应用和 Redux 状态管理的桥梁。其中既有 React 的 API，也会依赖 Redux 的相关 API。其实 React-Redux 主要提供了两个 api:
+1. Provider 为后代组件提供store
+2. connect 为组件提供数据和变更⽅法
+## Provider
+将根组件嵌套在 `<Provider>` 中，这样子孙组件就能通过 `connect` 获取到 state
+
+例子：
+
+```javascript
+import React from "react";
+import ReactDOM from "react-dom";
+import App from "./App";
+import { Provider } from "react-redux";
+import store from "./store";
+
+ReactDOM.render(
+  <React.StrictMode>
+    <Provider store={store}>
+      <App />
+    </Provider>
+  </React.StrictMode>,
+  document.getElementById("root")
+);
+
+```
+其中的	`store` 参数就是指 Redux 的 `createStore` 生成的 store
+
+## connect
+`connect` 是个高阶组件，经过它包装后的组件将获取如下功能：
+
+ 1. 默认 `props` 里会带有 `dispatch` 函数
+ 2. 如果给 `connect` 传递了第一个参数，那么会将 `store` 里的 `state` 数据，映射到当前组件的 `props` 里
+ 3. 如果给 `connect` 传递了第二个参数，那么会将相关方法，映射到当前组件的 `props` 里
+ 4. 组件依赖的 `state` 更改时，会通知当前组件更新，重新渲染视图
+ 语法：
+```javascript
+function connect(mapStateToProps?, mapDispatchToProps?, mergeProps?, options?)
+```
+> 默认 create-react-app 脚手架是不支持 @装饰器的，可以通过 react-app-rewired [优雅配制](https://www.huaweicloud.com/articles/71bf8dcfcd156da7e5c1d325b6a999d9.html)
+
+接下来分别讲解下这四个参数
+
+**mapStateToProps：**
+```javascript
+const mapStateToProps = state => ({ count: state.count })
+```
+该函数必须返回一个纯对象，这个对象会与组件的 props 合并。如果定义该参数，组件将会监听 Redux store 的变化，否则不监听。
+
+**mapDispatchToProps:**
+
+如果省略这个 `mapDispatchToProps` 参数，默认情况下，`dispatch` 会注⼊到你的组件 `props` 中。
+该参数存在两种格式：
+ - 对象格式：
+```javascript
+const mapDispatchToProps = {
+  add: () => ({ type: "ADD" }),
+  minus: () => ({ type: "MINUS" }),
+};
+```
+对象里的方法名会被合并到组件的 `props` 里，通过该方法名就可以触发相应的 `action`
+
+**对象的形式，没办法往 `props` 里注入 `dispatch`，只能是具体的 `action` 操作**
+ - 函数形式：
+该函数将接收 `dispatch` 参数，然后返回任何要注入到 props 里的对象
+```javascript
+const mapDispatchToProps = (dispatch) => ({
+  add: () => dispatch({ type: "ADD" }),
+  minus: () => dispatch({ type: "MINUS" }),
+});
+```
+上面这种写法有些复杂，可以采用 redux 提供的 `bindActionCreators` 简化下
+
+```javascript
+const mapDispatchToProps = (dispatch) => {
+  let creators = {
+    add: () => ({ type: "ADD" }),
+    minus: () => ({ type: "MINUS" }),
   };
-  minus = () => {
-    store.dispatch({ type: "MINUS", payload: 1 });
+  creators = bindActionCreators(creators, dispatch);
+  return {
+    ...creators,
+    dispatch,
   };
+};
+```
+**mergeProps:**
+```javascript
+mergeProps(stateProps, dispatchProps, ownProps)
+```
+如果省略这个 mergeProps 参数，默认情况下，会返回 `Object.assign({}, ownProps, stateProps, dispatchProps)`。
+
+如果定义了这个参数，`mapStateToProps()` 与 `mapDispatchToProps()` 的执⾏结果和组件⾃身的 `props` 将传⼊到这个回调函数中。
+
+该回调函数返回的对象将作为 `props` 传递到被包裹的组件中。
+
+**options:**
+```javascript
+{
+  context?: Object,   // 自定义上下文
+  pure?: boolean, // 默认为 true , 当为 true 的时候 ，除了 mapStateToProps 和 props ,其他输入或者state 改变，均不会更新组件。
+  areStatesEqual?: Function, // 当pure true , 比较引进store 中state值 是否和之前相等。 (next: Object, prev: Object) => boolean
+  areOwnPropsEqual?: Function, // 当pure true , 比较 props 值, 是否和之前相等。 (next: Object, prev: Object) => boolean
+  areStatePropsEqual?: Function, // 当pure true , 比较 mapStateToProps 后的值 是否和之前相等。  (next: Object, prev: Object) => boolean
+  areMergedPropsEqual?: Function, // 当 pure 为 true 时， 比较 经过 mergeProps 合并后的值 ， 是否与之前等  (next: Object, prev: Object) => boolean
+  forwardRef?: boolean, //当为true 时候,可以通过ref 获取被connect包裹的组件实例。
+}
+```
+`mergeProps` 与 `options` 比较少用到，重点关注前两个参数
+
+**示例代码：**
+
+```javascript
+import React, { Component } from "react";
+import { connect } from "react-redux";
+import { bindActionCreators } from "redux";
+const mapStateToProps = (state) => ({ count: state.count });
+// const mapDispatchToProps = {
+//   add: () => ({ type: "ADD" }),
+//   minus: () => ({ type: "MINUS" }),
+// };
+// const mapDispatchToProps = (dispatch) => ({
+//   add: () => dispatch({ type: "ADD" }),
+//   minus: () => dispatch({ type: "MINUS" }),
+// });
+
+const mapDispatchToProps = (dispatch) => {
+  let creators = {
+    add: () => ({ type: "ADD" }),
+    minus: () => ({ type: "MINUS" }),
+  };
+  creators = bindActionCreators(creators, dispatch);
+  return {
+    ...creators,
+    dispatch,
+  };
+};
+
+@connect(mapStateToProps, mapDispatchToProps)
+class Counter extends Component {
   render() {
+    const { count, add, minus } = this.props;
     return (
       <div className="border">
-        <h3>累加器</h3>
-        <button onClick={this.add}>add</button>
-        <span style={{ marginLeft: "10px", marginRight: "10px" }}>
-          {store.getState()}
-        </span>
-        <button onClick={this.minus}>minus</button>
+        <h3>加减器</h3>
+        <button onClick={add}>add</button>
+        <span style={{ marginLeft: "10px", marginRight: "10px" }}>{count}</span>
+        <button onClick={minus}>minus</button>
       </div>
     );
   }
 }
+export default Counter;
 
 ```
- - 通过 getState 显示 state
- - 点击 add 或 minus 时触发 dispatch 并传递指令(action)
- - 并在 componentDidMount 监听 state 更改，有更改则就 forceUpdate 强制渲染
- - componentWillUnmount 清除监听
+## useSelector and useDispatch
+在函数组件里，除了使用 `connect` 方式接收传递的 state 与 dispatch 信息之外，React-Redux 还提供了两个 hook: `useSelector` 与 `useDispatch`
 
-![加减器](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/ac620a66939141d3aaf477fa65d3361a~tplv-k3u1fbpfcp-zoom-1.image)
-
- 1. createStore 创建store
-  2. reducer 初始化、修改状态函数
-  3. getState 获取状态值
-  4. dispatch 提交更新
-  5. subscribe 变更订阅
- #	三、开始手写
- 上面有讲到 Redux 本身是与 React 没有丝毫联系的，所以我们先不与 React 搭配的写，而单纯只是在 html 里使用
- 通过上面的讲解也可以看到，其实主要的就是 createStore 函数，该函数会暴露 getState，dispatch，subScribe 三个函数
- 所以先搭下架子，创建 createStore.js 文件
+**useSelector:**
 ```javascript
-export default function createStore(reducer) {
-  let currentState;
-  // 获取 store 的 state
-  function getState() {}
-  // 更改 store
-  function dispatch() {}
-  // 订阅 store 更改
-  function subscribe() {}
-  return {
-    getState,
-    dispatch,
-    subscribe,
-  };
+const result: any = useSelector(selector: Function, equalityFn?: Function)
+```
+平时用的更多的是第一个参数，是个函数，参数为 `store` 的 `state`
+```javascript
+const state = useSelector(({ count }) => ({ count }));
+```
+返回个对象，`key` 为 `count`，内容就是 `store state` 里的 `count`。
+这样通过 `state.count` 就可以获取到
+
+**useDispatch:**
+```javascript
+const dispatch = useDispatch()
+```
+执行下 `useDispatch` 就获取到了 `dispatch`，通过 `dispatch` 就可以更改状态
+
+**useStore:**
+
+```javascript
+const store = useStore()
+```
+返回 `store` 对象的引用。尽量不要使用该 `hook`，`useSelector` 才是首选
+
+**示例代码：**
+```javascript
+import { useCallback } from "react";
+import { useSelector, useDispatch } from "react-redux";
+export default function ReactReduxHookPage() {
+  const state = useSelector(({ count }) => count);
+  const dispatch = useDispatch();
+  const add = useCallback(() => {
+    dispatch({ type: "ADD" });
+  }, []);
+  return (
+    <div>
+      <h3>ReactReduxHookPage</h3>
+      <p>{state}</p>
+      <button onClick={add}>add</button>
+    </div>
+  );
 }
 ```
-接着完善下各方法
-## getState
-返回当前的 state
+
+# 三、手写 Provide
+`provide` 做的事情就是为后代组件提供 store ，这不正是 `React context api` 干的事
+首先建一个 context 文件，导出需要用的 context ：
 
 ```javascript
-function getState() {
-	return currentState
-}
+import React from "react";
+
+const ReactReduxContext = React.createContext();
+
+export default ReactReduxContext;
+
 ```
-## dispatch
-接收 action，并更新 store，通过谁更新的呢？ reducer
+将 context 应用到 `Provider` 组件里
 
 ```javascript
-  // 更改 store
-  function dispatch(action) {
-    // 将当前的 state 以及 action 传入 reducer 函数
-    // 返回新的 state 存储在 currentState
-    currentState = reducer(currentState, action);
-  }
-```
-## subscribe
-**作用：** 订阅 state 的更改
-**如何做：** 采用[观察者模式](https://juejin.cn/post/6961017766560137230)，组件方监听 subscribe ，并传入回调函数，在 subscribe 里注册回调，并在 dispatch 触发回调
-subscribe 里除了注册回调之外，还要返回注销该监听的函数，用于组件注销时取消该监听
-```javascript
-let curerntListeners = [];
-// 订阅 state 更改
-function subscribe(listener) {
-  curerntListeners.push(listener);
-  return () => {
-    const index = curerntListeners.indexOf(listener);
-    curerntListeners.splice(index, 1);
-  };
-}
-```
-dispatch 方法在更新数据之后，要执行订阅事件。
-
-```javascript
-  // 更改store
-  function dispatch(action) {
-    // store里面数据就更新了
-    currentState = reducer(currentState, action);
-
-    // 执行订阅事件
-    curerntListeners.forEach(listener => listener());
-  }
-```
-## 完整代码
-将上面计数器里的 redux 改成引用手写的 redux，会发现页面没有最初值
-![初始值](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/6cee5353f941458eb8cc2005158eda0a~tplv-k3u1fbpfcp-zoom-1.image)
-所以在 createStore 里加上 ` dispatch({ type: "kkk" });` 要注意传入的这个 type 要进入 reducer 函数的 **default** 条件
-完整代码如下：
-
-```javascript
-export default function createStore(reducer) {
-  let currentState;
-  let curerntListeners = [];
-  // 获取 store 的 state
-  function getState() {
-    return currentState;
-  }
-  // 更改 store
-  function dispatch(action) {
-    // 将当前的 state 以及 action 传入 reducer 函数
-    // 返回新的 state 存储在 currentState
-    currentState = reducer(currentState, action);
-    // 执行订阅事件
-    curerntListeners.forEach((listener) => listener());
-  }
-  // 订阅 state 更改
-  function subscribe(listener) {
-    curerntListeners.push(listener);
-    return () => {
-      const index = curerntListeners.indexOf(listener);
-      curerntListeners.splice(index, 1);
-    };
-  }
-  dispatch({ type: "kkk" });
-  return {
-    getState,
-    dispatch,
-    subscribe,
-  };
+import ReactReduxContext from "./context";
+export function Provider({ children, store }) {
+  return (
+    <ReactReduxContext.Provider value={store}>
+      {children}
+    </ReactReduxContext.Provider>
+  );
 }
 
 ```
-大家也可以自行查看下 Redux 里的 createStore [源码](https://github.com/reduxjs/redux/blob/master/src/createStore.ts)
+可以看出 Provider 组件代码不难，无非就是将传进来的 `store` 作为 `context` 的 `value` 值，然后直接渲染 `children` 即可
 
-# 四、Redux 中间件
-说到 Redux，那就不得不提中间件，因为本身 Redux 能做的东西很有限，比如需要 redux-thunk 来达到异步调用，redux-logger 记录日志等。中间件就是个函数，对 store.dispatch 方法进行改造，在发出 Action 和执行 Reducer 这两步之间，添加其他功能，相当于加强 dispatch。
-
-## 开发 Redux 中间件
-开发中间件是有模板代码的
+# 四、手写 connect
+## 基本功能
+上面也讲到 `connect` 是个函数，并且返回个高阶组件，所以它的基本结构为：
 
 ```javascript
-export default store => next => action => {}
-```
- 1. 一个中间件接收 store 作为参数，返回一个函数
- 2. 返回的这个函数接收 next（老的 dispatch 函数） 作为参数，返回一个新的函数
- 3. 返回的新的函数就是加强的 dispatch 函数，在这个函数里可以拿到上面两层传递进来的 store 以及 next
-
-比如模拟写个 logger 中间件
-
-```javascript
-function logger(store) {
-  return (next) => {
-    return (action) => {
-      console.log("====================================");
-      console.log(action.type + "执行了！");
-      console.log("prev state", store.getState());
-      next(action);
-      console.log("next state", store.getState());
-      console.log("====================================");
+function connect() {
+  return function (WrappedComponent) {
+    return function (props) {
+      return <WrappedComponent {...props} />;
     };
   };
 }
-export default logger;
+export default connect;
 ```
-## 注册中间件
-```javascript
-// 在createStore的时候将applyMiddleware作为第二个参数传进去
-const store = createStore(
-  reducer,
-  applyMiddleware(logger)
-)
-```
-可以看到是通过 createStore 的第二个参数来实现的，这个参数就是 enhancer。
+罗列个 connect 组件要实现的功能：
 
-> 实现上 createStore 总共是有三个参数，除了第一个 reducer 参数是必传的之外，第二个 state 初始值，以及第三个 enhancer 都是可选的
-
-下面我们在手写的 createStore 里加入 enhancer
-###  支持 enhancer
-```javascript
-function createStore(reducer,enhancer) {
-	// 判断是否存在 enhancer
-	// 如果存在并且是个函数, 则将 createStore 传递给它, 不是函数则抛出错误
-	// 它会返回个新的 createStore
-	// 传入 reducer ,执行新的 createStore，返回 store
-	// 返回该 store
-	if (typeof enhancer !== 'undefined') {
-		if (typeof enhancer !== 'function') {
-			throw new Error('enhancer必须是函数')
-		}
-		return enhancer(createStore)(reducer)
-	}
-	// 没有 enhancer 走原先的逻辑
-	// 省略
-}
-```
-
-### 手写 applyMiddleware
-按上面的分析，applyMiddleware 函数，会接收中间件函数，并返回个 enhancer，所以基本结构为
+ 1. 接收传递下来的 `store` 
+ 2. 如果传递了 `mapStateToProps` 参数，则传入 `state` 执行
+ 3. 默认将 `dispatch` 注入组件的 `props` 里
+ 4. 如果传递了 `mapDispatchToProps` 参数并且参数是个**函数**类型，则传入 `dispatch` 执行
+ 5. 如果传递了 `mapDispatchToProps` 参数并且参数是个**对象**类型，则就要将参数当作 `creators action` 处理
+ 6. 将处理好的 `stateProps`，`dispatchProps`，以及组件自身的 `props` 一并传入组件
 
 ```javascript
-export default function applyMiddleware(...middlewares) {
-  // applyMiddleware 的返回值应该是一个 enhancer
-  // enhancer 是个接收 createStore 为参数的函数
-  return function (createStore) {
-    // enhancer 要返回一个新的 createStore
-    return function newCreateStore(reducer) {};
-  };
-}
-
-```
-回想下 logger 中间件的结构，完善下 applyMiddleware
-
-```javascript
-export default function applyMiddleware(middleware) {
-  // applyMiddleware 的返回值应该是一个 enhancer
-  // enhancer 是个接收 createStore 为参数的函数
-  //
-  return function (createStore) {
-    // enhancer 要返回一个新的 createStore
-    return function newCreateStore(reducer) {
-      // 创建 store
-      let store = createStore(reducer);
-      let dispatch = store.dispatch;
-
-      // dispatch 属性一定要写成这种形式,不能直接将 store.dispatch 传入
-      // 因为有多个中间件时, dispatch 的值是要获取上一个中间件加强后的 dispatch
-      // 这种传递方式有效，是由于 dispatch 是引用类型
-      const midApi = {
-        getState: store.getState,
-        dispatch: (action, ...args) => dispatch(action, ...args),
-      };
-      // 传入 store 执行 middleware
-      // 得到新的 createStore 函数
-      const chain = middleware(midApi);
-
-      // 将原始的 dispatch 函数作为 next 参数传给 chain
-      // 返回加强的 dispatch 覆盖最初的 dispatch
-      dispatch = chain(dispatch);
-
-      return {
-        ...store,
-        dispatch,
-      };
-    };
-  };
-}
-
-```
-**测试：**
-是可以正常打印出日志的
-![打印日志](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/8c87f37be9844740abaa86dabfa98dc7~tplv-k3u1fbpfcp-zoom-1.image)
-### 支持多个中间件
-上面已经在 applyMiddleware 函数里处理只有一个中间件的情况，那多个的场景呢？
-首先我们再模拟写个 redux-thunk 中间件
-默认 redux 只支持同步，并且参数只能是对象形式，redux-thunk 要实现的是你传入一个函数时，我就直接执行该函数，异步操作代码写在传递过来的函数里，如果传递过来的是个对象，则调用下一个中间件
-```javascript
-function thunk({ getState, dispatch }) {
-  return next => {
-    return action => {
-      // 如果是个函数，则直接执行，并传入 dispatch 与 getState
-      if (typeof action == 'function') {
-        return action(dispatch, getState)
+import { useContext } from "react";
+import ReactReduxContext from "./context";
+function connect(mapStateToProps, mapDispatchToProps) {
+  return function (WrappedComponent) {
+    return function (props) {
+      let stateProps = {};
+      let dispatchProps = {};
+      // 1. 接收传递下来的 store
+      const store = useContext(ReactReduxContext);
+      const { getState, dispatch } = store;
+      // 2. 如果传递了 mapStateToProps 参数，则传入 state 执行
+      if (
+        mapStateToProps !== "undefined" &&
+        typeof mapStateToProps === "function"
+      ) {
+        stateProps = mapStateToProps(getState());
       }
-      next(action)
-    }
-  }
-}
-```
-
-现在要去依次执行各个中间件，要如何依次执行呢？就得采用柯里化，首先写个 compose
-
-```javascript
-function compose(...funs) {
-	// 没有传递函数时，则返回参数透传函数
-	if (funs.length === 0) {
-		return (arg) => arg
-	}
-	// 传递一个函数时，则直接返回该函数，省去了遍历
-	if (funs.length === 1) {
-		return funs[0]
-	}
-	// 传递多个时，则采用 reduce,进行合并
-	// 比如执行 compose(f1,f2,f3) 则会返回 (...args) => f1(f2(f3(...args)))
-	return funs.reduce((a, b) => {
-		return (...args) => {
-			return a(b(...args))
-		}
-	})
-}
-```
-applyMiddleware 函数支持多个中间件的代码：
-
-```javascript
-export default function applyMiddleware(...middlewares) {
-  // applyMiddleware 的返回值应该是一个 enhancer
-  // enhancer 是个接收 createStore 为参数的函数
-  //
-  return function (createStore) {
-    // enhancer 要返回一个新的 createStore
-    return function newCreateStore(reducer) {
-      // 创建 store
-      let store = createStore(reducer);
-      let dispatch = store.dispatch;
-
-      // dispatch 属性一定要写成这种形式,不能直接将 store.dispatch 传入
-      // 因为有多个中间件时, dispatch 的值是要获取上一个中间件加强后的 dispatch
-      // 这种传递方式有效，是由于 dispatch 是引用类型
-      const midApi = {
-        getState: store.getState,
-        dispatch: (action, ...args) => dispatch(action, ...args),
-      };
-      // 调用中间件的第一层函数 传递阉割版的 store 对象
-      const middlewareChain = middlewares.map((middle) => middle(midApi));
-      // 用 compose 得到一个组合了所有中间件的函数
-      const middleCompose = compose(...middlewareChain);
-
-      // 将原始的 dispatch 函数作为参数逐个调用中间件的第二层函数
-      // 返回加强的 dispatch 覆盖最初的 dispatch
-      dispatch = middleCompose(dispatch);
-
-      return {
-        ...store,
-        dispatch,
-      };
+      //  3. 默认将 dispatch 注入组件的 props 里
+      dispatchProps = { dispatch };
+      //  4. 如果传递了 mapDispatchToProps 参数并且参数是个函数类型，则传入 dispatch 执行
+      //  5. 如果传递了 mapDispatchToProps 参数并且参数是个对象类型，则就要将参数当作 creators action 处理
+      if (mapDispatchToProps !== "undefined") {
+        if (typeof mapDispatchToProps === "function") {
+          dispatchProps = mapDispatchToProps(dispatch);
+        } else if (typeof mapDispatchToProps === "object") {
+          dispatchProps = bindActionCreators(mapDispatchToProps, dispatch);
+        }
+      }
+      return <WrappedComponent {...props} {...stateProps} {...dispatchProps} />;
     };
   };
 }
-```
-**验证：**
 
-```javascript
-import { createStore } from "../kredux";
-import logger from "../kredux/middlewares/logger";
-import thunk from "../kredux/middlewares/thunk";
-import applyMiddleware from "../kredux/applyMiddleware";
-
-const counterReducer = (state = 0, { type, payload = 1 }) => {
-  switch (type) {
-    case "ADD":
-      return state + payload;
-    case "MINUS":
-      return state - payload;
-    default:
-      return state;
+// 手写 redux 里的 bindActionCreators
+function bindActionCreators(creators, dispatch) {
+  let obj = {};
+  // 遍历对象
+  for (let key in creators) {
+    obj[key] = bindActionCreator(creators[key], dispatch);
   }
-};
-export default createStore(counterReducer, applyMiddleware(thunk, logger));
+  return obj;
+}
+
+// 将 () => ({ type:'ADD' }) creator 转成成 () => dispatch({ type:'ADD' })
+function bindActionCreator(creator, dispatch) {
+  return (...args) => dispatch(creator(...args));
+}
+export default connect;
 
 ```
-并将 add 函数更改成异步触发 dispatch
+## 触发组件更新
+将官方的 React-Redux 替换为手写的 provider 与 connect，可以正常显示出页面，但会发现点击按钮，页面上的值并没有发生改变
+![页面没有更新](https://img-blog.csdnimg.cn/img_convert/7e317df743bb880b89cb02416f4c3ac7.png)
+在上一篇 Redux 里讲过，可以用 `store.subscribe` 来监听 `state` 的变化并执行回调。
 
 ```javascript
-  add = () => {
-    // store.dispatch({ type: "ADD", payload: 1 });
-    store.dispatch(function (dispatch) {
-      setTimeout(() => {
-        dispatch({ type: "ADD", payload: 2 });
-      }, 1000);
-    });
-  };
+store.subscribe(() => {
+	this.forceUpdate()
+})
 ```
-![中间件](https://p3-juejin.byteimg.com/tos-cn-i-k3u1fbpfcp/1fdacd6ad2354d088531aaf29ac9e7fe~tplv-k3u1fbpfcp-zoom-1.image)
-# 五、手写 combineReducers
-当业务逻辑复杂时，不可能都写在一个 reducer 里，这时就已经使用 combineReducers 将几个 reducer 组合起来。
-再添加个 userReducer
+由于 `connect` 是个函数组件，那么在函数里是否有类似 `forceUpdate` 的东西呢？
+目前官方并未提供，所以只能通过模拟实现：⽤⼀个增⻓的计数器来强制重新渲染
 
 ```javascript
-const userReducer = (state = { ...initialUser }, { type, payload }) => {
-  switch (type) {
-    case "SET":
-      return { ...state, ...payload };
-    default:
-      return state;
-  }
-};
+const [, forceUpdate] = useReducer(x => x + 1, 0);
+function handleClick() {
+	forceUpdate();
+}
 ```
-引入 combineReducers ，该函数接收个对象，key 为标识，value 为每个 reducer
-
+在 `connect` 函数里加上如下代码：
 ```javascript
-export default createStore(
-  combineReducers({ count: counterReducer, user: userReducer }),
-  applyMiddleware(thunk, logger)
-);
-```
-根据上面的分析，来手写个 combineReducers ，它要返回个 reducer 函数，reducer 函数自然是要接收 state 跟 action 并返回新的 state
-
-```javascript
-export default function combineReducers(reducers) {
-  return function reducer(state = {}, action) {
-    let nextState = {};
-    // 遍历所有的 reducers,并依次触发返回新的 state
-    for (let key in reducers) {
-      nextState[key] = reducers[key](state[key], action);
+  const [, forceUpdate] = useReducer(x => x+1, 0)
+  // 之所以用 useLayoutEffect 是为了在页面渲染之前就执行，防止操作过快时，采用 useEffect 会有缺失的情况
+  const unsubscribe = useLayoutEffect(() => {
+    subscribe(()=> {
+      forceUpdate()
+    })
+    return () => {
+      if(unsubscribe) {
+        unsubscribe()
+      }
     }
-    return nextState;
+  }, [store])
+```
+再次验证:
+![功能大体正常](https://img-blog.csdnimg.cn/img_convert/950cf17f9cdc4f0a0872cbd2413eafa5.png)
+可以看到点击按钮，页面已经可以即时响应了，那是否已经足够完善呢？不是的，还存在些问题，下面我们边分析边改进
+## 检查 props 变化
+再添加个 user.js 组件：
+
+```javascript
+import React, { Component } from "react";
+import { connect } from "../kReactRedux";
+
+@connect(({ user }) => ({
+  user,
+}))
+class User extends Component {
+  render() {
+    console.info(222); // 方便查看是否会重新渲染
+    const { user } = this.props;
+    return (
+      <div className="border">
+        <h3>用户信息</h3>
+        {user.name}
+      </div>
+    );
+  }
+}
+export default User;
+```
+该组件只依赖 `store` 里的 `user` 信息，但访问该页面，会发现点击 `counter` 组件里的 `add` 按钮，会导致 `user` 组件一并重新渲染
+![重新渲染](https://img-blog.csdnimg.cn/img_convert/1868252e64720ba7c5247d981e6c4b39.png)
+这也不难理解，因为现有的代码是采用 `subscribe` ，一旦 `store` 状态更改就会触发回调，而回调里做的事情就是强制刷新，而 `user` 组件又是采用 `connect` 包装的，自然也就会重新渲染。所以应该要在触发回调时，判断下当前组件的 `props` 值是否更改，如果更改了才强制刷新。
+
+要检查前后 `props` 的更改，就需要将上次渲染的 `props` 与本次渲染的 `props` 进行比较。而要存储上次渲染的 `props` ，就得采用 [useRef](https://juejin.cn/post/6950464567847682056) 将上次渲染的 `props` 存储下来
+
+```javascript
+// 6.组装最终的props
+const actualProps = Object.assign({}, props, stateProps, dispatchProps);
+// 7.记录上次渲染参数
+const lastProps = useRef();
+useLayoutEffect(() => {
+  lastProps.current = actualProps;
+}, []);
+```
+检测 `props` 是否变化是需要重新计算的，所以将获取最终 `props` 的逻辑抽离出来
+
+```javascript
+  function getProps(store, wrapperProps) {
+    const { getState, dispatch } = store;
+    let stateProps = {};
+    let dispatchProps = {};
+
+    // 2. 如果传递了 mapStateToProps 参数，则传入 state 执行
+    if (
+      mapStateToProps !== "undefined" &&
+      typeof mapStateToProps === "function"
+    ) {
+      stateProps = mapStateToProps(getState());
+    }
+    console.info(stateProps, "stateProps");
+    //  3. 默认将 dispatch 注入组件的 props 里
+    dispatchProps = { dispatch };
+    //  4. 如果传递了 mapDispatchToProps 参数并且参数是个函数类型，则传入 dispatch 执行
+    //  5. 如果传递了 mapDispatchToProps 参数并且参数是个对象类型，则就要将参数当作 creators action 处理
+    if (mapDispatchToProps !== "undefined") {
+      if (typeof mapDispatchToProps === "function") {
+        dispatchProps = mapDispatchToProps(dispatch);
+      } else if (typeof mapDispatchToProps === "object") {
+        dispatchProps = bindActionCreators(mapDispatchToProps, dispatch);
+      }
+    }
+
+    // 6.组装最终的props
+    const actualProps = Object.assign(
+      {},
+      wrapperProps,
+      stateProps,
+      dispatchProps
+    );
+
+    return actualProps;
+  }
+```
+
+那么要如何比较前后两个 `props` 是否更改呢？ `React-Redux` 里面是采用的 `shallowEqual` ，也就是浅比较
+
+```javascript
+// shallowEqual.js 
+function is(x, y) {
+  if (x === y) {
+    // 处理  +0 === -0 // true 的情况
+    // 当是 +0 与 -0 时,要返回 false
+    return x !== 0 || y !== 0 || 1 / x === 1 / y;
+  } else {
+    // 处理 NaN !== NaN // true 的情况
+    // 当 x 与 y 是 NaN 时,要返回 true
+    return x !== x && y !== y;
+  }
+}
+
+export default function shallowEqual(objA, objB) {
+  // 首先对基本数据类型的比较
+  // !! 若是同引用便会返回 true
+  if (is(objA, objB)) return true;
+  // 由于 is() 已经对基本数据类型做一个精确的比较，所以如果不等
+  // 那就是object,所以在判断两个数据有一个不是 object 或者 null 之后，就可以返回false了
+  if (
+    typeof objA !== "object" ||
+    objA === null ||
+    typeof objB !== "object" ||
+    objB === null
+  ) {
+    return false;
+  }
+
+  // 过滤掉基本数据类型之后，就是对对象的比较了
+  // 首先拿出 key 值，对 key 的长度进行对比
+  const keysA = Object.keys(objA);
+  const keysB = Object.keys(objB);
+
+  // 长度不等直接返回false
+  if (keysA.length !== keysB.length) return false;
+  // 长度相等的情况下，进行循环比较
+  for (let i = 0; i < keysA.length; i++) {
+    // 调用 Object.prototype.hasOwnProperty 方法，判断 objB 里是否有 objA 中所有的 key
+    // 如果有那就判断两个 key 值所对应的 value 是否相等(采用 is 函数)
+    if (
+      !Object.prototype.hasOwnProperty.call(objB, keysA[i]) ||
+      !is(objA[keysA[i]], objB[keysA[i]])
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+```
+在 `subscribe` 回调里先获取最新的 `props`，并与上一次的 `props` 进行比较，如果不一样才进行更新，对应的组件就会重新渲染，而如果一样就不调用强制刷新函数，组件也就不会重新渲染。
+
+```javascript
+ subscribe(() => {
+  const newProps = getProps(store, props);
+   if (!shallowEqual(lastProps.current, newProps)) {
+     lastProps.current = actualProps;
+     forceUpdate();
+   }
+});
+```
+**connect 完整代码：**
+```javascript
+import { useContext, useReducer, useLayoutEffect, useRef } from "react";
+import ReactReduxContext from "./context";
+import shallowEqual from "./shallowEqual";
+function connect(mapStateToProps, mapDispatchToProps) {
+  function getProps(store, wrapperProps) {
+    const { getState, dispatch } = store;
+    let stateProps = {};
+    let dispatchProps = {};
+
+    // 2. 如果传递了 mapStateToProps 参数，则传入 state 执行
+    if (
+      mapStateToProps !== "undefined" &&
+      typeof mapStateToProps === "function"
+    ) {
+      stateProps = mapStateToProps(getState());
+    }
+    //  3. 默认将 dispatch 注入组件的 props 里
+    dispatchProps = { dispatch };
+    //  4. 如果传递了 mapDispatchToProps 参数并且参数是个函数类型，则传入 dispatch 执行
+    //  5. 如果传递了 mapDispatchToProps 参数并且参数是个对象类型，则就要将参数当作 creators action 处理
+    if (mapDispatchToProps !== "undefined") {
+      if (typeof mapDispatchToProps === "function") {
+        dispatchProps = mapDispatchToProps(dispatch);
+      } else if (typeof mapDispatchToProps === "object") {
+        dispatchProps = bindActionCreators(mapDispatchToProps, dispatch);
+      }
+    }
+
+    // 6.组装最终的props
+    const actualProps = Object.assign(
+      {},
+      wrapperProps,
+      stateProps,
+      dispatchProps
+    );
+
+    return actualProps;
+  }
+  return function (WrappedComponent) {
+    return function (props) {
+      // 1. 接收传递下来的 store
+      const store = useContext(ReactReduxContext);
+      const { subscribe } = store;
+      const actualProps = getProps(store, props);
+      // 7.记录上次渲染参数
+      const lastProps = useRef();
+      const [, forceUpdate] = useReducer((x) => x + 1, 0);
+      const unsubscribe = useLayoutEffect(() => {
+        subscribe(() => {
+          const newProps = getProps(store, props);
+          if (!shallowEqual(lastProps.current, newProps)) {
+            lastProps.current = actualProps;
+            forceUpdate();
+          }
+        });
+        lastProps.current = actualProps;
+        return () => {
+          if (unsubscribe) {
+            unsubscribe();
+          }
+        };
+      }, [store]);
+      return <WrappedComponent {...actualProps} />;
+    };
   };
 }
 
+// 手写 redux 里的 bindActionCreators
+function bindActionCreators(creators, dispatch) {
+  let obj = {};
+  // 遍历对象
+  for (let key in creators) {
+    obj[key] = bindActionCreator(creators[key], dispatch);
+  }
+  return obj;
+}
+
+// 将 () => ({ type:'ADD' }) creator 转成成 () => dispatch({ type:'ADD' })
+function bindActionCreator(creator, dispatch) {
+  return (...args) => dispatch(creator(...args));
+}
+
+export default connect;
+
+
 ```
+**验证下：**
+![验证](https://img-blog.csdnimg.cn/img_convert/873c87c76f7a62f04ef19840f181b3aa.png)
+点击 counter 里的 `add` 按钮，更改的是 `count` 值，由于 counter 组件里的 `mapStateToProps` 函数是跟 `count` 有关的，所以执行完 `getProps` 获取到的 `props` 跟原先的是不一样的；
 
-# 六、总结
+而 user 组件里 `mapStateToProps` 、`mapDispatchToProps`、原有的 `props` 三者都与 `count` 无关，执行完 `getProps` 获取到的 `props` 是跟原先一样的，所以 user 组件不会重新渲染。
 
- 1. Redux 本身就只是个可预测性状态容器，状态的更改都是通过发出 Action 指令，Action 指令会分发给 Reducer ，再由 Reducer 返回新的状态值，组件进行监听，但状态值更改了，就重新渲染。
- 2. Redux 是典型的观察者模式，subscribe 时注册回调事件，dispatch action 时执行回调
- 3. Redux 重点在于 createStore 函数，该函数会返回三个方法，其中 getState 用于返回当前的 state，subscribe 用于订阅 state 的更改，dispatch 更新 store，并执行回调事件
- 4. 默认的 Redux 只支持传入对象，以及只能执行同步，要满足更多的场景就需要采用中间件
- 5. 中间件是个模板为`export default store => next => action => {}` 的函数
- 6. 注册中间件，就要使用 createStore 的 enhancer
- 7. Redux 的中间件是对 dispatch 进行加强，这就是典型的[装饰者模式](https://juejin.cn/post/6962439378266226696)，可以看出 Redux 里到处是设计模式
+# 五、手写 useSelector 与 useDispatch
+**useSelector:**
+接收个函数参数，传入 `state` 并执行返回即可。当 `state` 更改时，强制重新执行
+
+```javascript
+import ReactReduxContext from "./context";
+import { useContext, useReducer, useLayoutEffect } from "reat";
+export default function useSelector(selector) {
+  const store = useContext(ReactReduxContext);
+  const { getState, subscribe } = store;
+  const [, forceUpdate] = useReducer((x) => x + 1, 0);
+  const unsubscribe = useLayoutEffect(() => {
+    subscribe(() => {
+      forceUpdate();
+    });
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+  return selector(getState());
+}
+
+```
+**useDispatch：**
+
+返回 dispatch 即可
+
+```javascript
+import ReactReduxContext from "./context";
+import { useContext } from "reat";
+export default function useDispatch() {
+  const store = useContext(ReactReduxContext);
+  const { dispatch } = store;
+  return dispatch;
+}
+
+```
+# 五、总结
+
+1. `React-Redux` 是连接 `React` 和 `Redux` 的库，同时使用了 `React` 和 `Redux` 的API。
+2. `React-Redux` 提供的两个主要 api 是 `Provider` 与 `connect`
+3. `Provider` 的作用是接收 `store` 并将它放到 `contextValue` 上传递下去。
+4.	`connect` 的作用是从 `store` 中选取需要的属性(包括 `state` 与 `dispatch` )传递给包裹的组件。
+5.	`connect` 会自己判断是否需要更新，判断的依据是依赖的 `store state` 是否已经变化了。
