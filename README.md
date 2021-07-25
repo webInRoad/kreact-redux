@@ -1,5 +1,6 @@
 
 >[本文代码](https://codesandbox.io/s/github/webInRoad/kreact-redux)
+
 [上一篇手写了 Redux 源码](https://juejin.cn/post/6988465501047357471)，同时也说明了 Redux 里头是没有 React 相关的 API，这篇咱们来写下 React-Redux，那么 React，Redux 以及 React-Redux 关系是：
  - Redux： Redux 是一个应用状态管理js库，它本身和 React 是没有关系的，换句话说，Redux 可以应用于其他框架构建的前端应用。
  - React-Redux：React-Redux 是连接 React 应用和 Redux 状态管理的桥梁。React-redux 主要专注两件事，一是如何向 React 应用中注入 redux 中的 Store ，二是如何根据 Store 的改变，把消息派发给应用中需要状态的每一个组件。
