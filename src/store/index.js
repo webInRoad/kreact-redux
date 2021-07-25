@@ -4,7 +4,7 @@ import thunk from "../kredux/middlewares/thunk";
 
 const initialUser = {
   id: null,
-  name: "",
+  name: "张三",
 };
 const counterReducer = (state = 0, { type, payload = 1 }) => {
   switch (type) {
@@ -26,6 +26,6 @@ const userReducer = (state = { ...initialUser }, { type, payload }) => {
   }
 };
 export default createStore(
-  combineReducers({ count: counterReducer, user: userReducer }),
-  applyMiddleware(thunk, logger)
+  combineReducers({ count: counterReducer, user: userReducer })
+  // applyMiddleware(thunk, logger)
 );
